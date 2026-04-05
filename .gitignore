@@ -46,3 +46,5 @@ cdk/cdk.out/
 
 # Claude Code settings (local)
 .claude/
+
+CLAUDE.md

@@ -65,13 +65,7 @@ cp .env.example .env
 # Edit .env with your AWS credentials
 ```
 
-### 3. Build Lambda Layer
-
-```bash
-./scripts/build-layer.sh
-```
-
-### 4. Deploy CDK Stack
+### 3. Deploy CDK Stack
 
 ```bash
 cd cdk
@@ -80,7 +74,7 @@ pnpm cdk bootstrap  # First time only
 pnpm cdk deploy
 ```
 
-### 5. Setup Workflow
+### 4. Setup Workflow
 
 After CDK deployment, configure the OpenSearch workflow:
 
@@ -88,7 +82,7 @@ After CDK deployment, configure the OpenSearch workflow:
 ./scripts/setup-workflow.sh
 ```
 
-### 6. Test with Sample Data (No Slack Required)
+### 5. Test with Sample Data (No Slack Required)
 
 You can test hybrid search with sample data before setting up Slack:
 
@@ -122,7 +116,7 @@ curl -X POST "${API_ENDPOINT}search" \
   -d '{"query": "パフォーマンスを改善したい", "mode": "vector"}'
 ```
 
-### 7. Configure Slack App
+### 6. Configure Slack App
 
 To connect with your actual Slack workspace:
 
@@ -136,7 +130,7 @@ To connect with your actual Slack workspace:
 5. In **Subscribe to bot events**, add `message.channels`
 6. Install the app to your workspace
 
-### 8. Post Dummy Messages to Slack for Testing
+### 7. Post Dummy Messages to Slack for Testing
 
 After Slack integration, test indexing with dummy messages:
 
@@ -151,7 +145,7 @@ After Slack integration, test indexing with dummy messages:
 
 Alternatively, manually post the content of `scripts/sample-messages.txt` to your Slack channel.
 
-### 9. Test Search
+### 8. Test Search
 
 ```bash
 # GET request
@@ -207,13 +201,12 @@ slack-hybrid-search-workflow/
 │   │   └── slack-hybrid-search-stack.ts
 │   └── lambda/
 │       ├── slack_webhook/    # Slack event handler
-│       │   └── handler.py
-│       ├── search/           # Search API
-│       │   └── handler.py
-│       └── layer/            # Shared dependencies
+│       │   ├── handler.py
+│       │   └── requirements.txt
+│       └── search/           # Search API
+│           ├── handler.py
 │           └── requirements.txt
 ├── scripts/
-│   ├── build-layer.sh        # Build Lambda Layer
 │   ├── setup-workflow.sh     # Setup Workflow API
 │   ├── load-sample-data.sh   # Load sample data (no Slack needed)
 │   ├── post-to-slack.sh      # Post dummy messages to Slack
