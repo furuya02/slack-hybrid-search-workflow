@@ -1,0 +1,47 @@
+# ユーザー指定の除外項目
+CLAUDE.md
+.claude/
+tmp/
+
+# 環境変数（実際の認証情報）
+.env
+.env.local
+.env.*.local
+
+# macOS
+.DS_Store
+
+# Node.js
+node_modules/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# TypeScript ビルド出力（CDK）
+*.js
+*.d.ts
+!cdk/jest.config.js
+
+# CDK
+cdk/cdk.out/
+cdk/.cdk.staging/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# Lambda Layer（ビルド時に生成）
+cdk/lambda/layer/python/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 一時ファイル
+*.tmp
