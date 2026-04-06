@@ -1,0 +1,87 @@
+{
+  "name": "slack-hybrid-search",
+  "workflows": {
+    "provision": {
+      "nodes": [
+        {
+          "id": "create_connector",
+          "type": "create_connector",
+          "user_inputs": {
+            "name": "Bedrock Titan Connector",
+            "version": "1",
+            "protocol": "aws_sigv4",
+            "credential": { "roleArn": "${BEDROCK_ROLE_ARN}" },
+            "parameters": { "region": "${AWS_REGION}", "service_name": "bedrock", "model": "amazon.titan-embed-text-v2:0" },
+            "actions": [{
+              "action_type": "predict",
+              "method": "POST",
+              "url": "https://bedrock-runtime.${AWS_REGION}.amazonaws.com/model/amazon.titan-embed-text-v2:0/invoke",
+              "request_body": "{ \"inputText\": \"${parameters.inputText}\", \"dimensions\": 1024, \"normalize\": true }",
+              "post_process_function": "connector.post_process.default.embedding"
+            }]
+          }
+        },
+        {
+          "id": "register_model",
+          "type": "register_remote_model",
+          "user_inputs": { "name": "Titan Embeddings V2", "function_name": "remote" },
+          "previous_node_inputs": { "create_connector": "connector_id" }
+        },
+        {
+          "id": "deploy_model",
+          "type": "deploy_model",
+          "previous_node_inputs": { "register_model": "model_id" }
+        },
+        {
+          "id": "create_ingest_pipeline",
+          "type": "create_ingest_pipeline",
+          "user_inputs": {
+            "pipeline_id": "slack-ingest-pipeline",
+            "configurations": {
+              "processors": [{ "text_embedding": { "field_map": { "text": "text_embedding" } } }]
+            }
+          },
+          "previous_node_inputs": { "deploy_model": "model_id" }
+        },
+        {
+          "id": "create_index",
+          "type": "create_index",
+          "user_inputs": {
+            "index_name": "slack-messages",
+            "configurations": {
+              "settings": { "index": { "knn": true, "default_pipeline": "slack-ingest-pipeline" } },
+              "mappings": { "properties": {
+                "message_id": { "type": "keyword" },
+                "channel_id": { "type": "keyword" },
+                "user_id": { "type": "keyword" },
+                "text": { "type": "text" },
+                "text_embedding": { "type": "knn_vector", "dimension": 1024, "method": { "name": "hnsw", "engine": "faiss", "space_type": "l2" } },
+                "timestamp": { "type": "keyword" },
+                "thread_ts": { "type": "keyword" },
+                "team_id": { "type": "keyword" },
+                "event_time": { "type": "long" }
+              }}
+            }
+          },
+          "previous_node_inputs": { "create_ingest_pipeline": "pipeline_id" }
+        },
+        {
+          "id": "create_search_pipeline",
+          "type": "create_search_pipeline",
+          "user_inputs": {
+            "pipeline_id": "hybrid-search-pipeline",
+            "configurations": {
+              "phase_results_processors": [{
+                "normalization-processor": {
+                  "normalization": { "technique": "min_max" },
+                  "combination": { "technique": "arithmetic_mean", "parameters": { "weights": [0.3, 0.7] } }
+                }
+              }]
+            }
+          },
+          "previous_node_inputs": { "create_index": "index_name" }
+        }
+      ]
+    }
+  }
+}
