@@ -18,7 +18,8 @@
               "method": "POST",
               "url": "https://bedrock-runtime.${AWS_REGION}.amazonaws.com/model/amazon.titan-embed-text-v2:0/invoke",
               "request_body": "{ \"inputText\": \"${parameters.inputText}\", \"dimensions\": 1024, \"normalize\": true }",
-              "post_process_function": "connector.post_process.default.embedding"
+              "pre_process_function": "\n    StringBuilder builder = new StringBuilder();\n    builder.append(\"\\\"\");\n    String first = params.text_docs[0];\n    builder.append(first);\n    builder.append(\"\\\"\");\n    def parameters = \"{\" +\"\\\"inputText\\\":\" + builder + \"}\";\n    return  \"{\" +\"\\\"parameters\\\":\" + parameters + \"}\";",
+              "post_process_function": "\n    def name = \"sentence_embedding\";\n    def dataType = \"FLOAT32\";\n    if (params.embedding == null || params.embedding.length == 0) {\n        return params.message;\n    }\n    def shape = [params.embedding.length];\n    def json = \"{\" +\n               \"\\\"name\\\":\\\"\" + name + \"\\\",\" +\n               \"\\\"data_type\\\":\\\"\" + dataType + \"\\\",\" +\n               \"\\\"shape\\\":\" + shape + \",\" +\n               \"\\\"data\\\":\" + params.embedding +\n               \"}\";\n    return json;"
             }]
           }
         },
@@ -39,7 +40,7 @@
           "user_inputs": {
             "pipeline_id": "slack-ingest-pipeline",
             "configurations": {
-              "processors": [{ "text_embedding": { "field_map": { "text": "text_embedding" } } }]
+              "processors": [{ "text_embedding": { "model_id": "${{deploy_model.model_id}}", "field_map": { "text": "text_embedding" } } }]
             }
           },
           "previous_node_inputs": { "deploy_model": "model_id" }
