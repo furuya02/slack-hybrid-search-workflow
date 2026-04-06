@@ -1,12 +1,12 @@
 # Slack Hybrid Search Workflow
 
-OpenSearch Serverless の AI Connectors を活用したハイブリッド検索システムを Workflow API で構築するサンプルコードです。
+OpenSearch Service の AI Connectors を活用したハイブリッド検索システムを Workflow API で構築するサンプルコードです。
 
-> **Note**: このリポジトリは、ブログ記事「[OpenSearch Serverless] AI Connectors を活用したハイブリッド検索システムを Workflow API で構築」のサンプルコードです。
+> **Note**: このリポジトリは、ブログ記事「[OpenSearch Service] AI Connectors を活用したハイブリッド検索システムを Workflow API で構築」のサンプルコードです。
 
 ## 概要
 
-このプロジェクトは、Slack のメッセージを OpenSearch Serverless に取り込み、キーワード検索（BM25）とベクトル検索（k-NN）を組み合わせたハイブリッド検索を実現します。
+このプロジェクトは、Slack のメッセージを OpenSearch Service に取り込み、キーワード検索（BM25）とベクトル検索（k-NN）を組み合わせたハイブリッド検索を実現します。
 
 ### 特徴
 
@@ -40,7 +40,6 @@ cd slack-hybrid-search-workflow
 
 # 環境変数の設定
 cp .env.example .env
-# .env を編集して AWS 認証情報を設定
 
 # CDK デプロイ
 cd cdk
@@ -49,7 +48,7 @@ pnpm cdk bootstrap  # 初回のみ
 pnpm cdk deploy
 ```
 
-デプロイ完了後、出力される `CollectionEndpoint` と `BedrockRoleArn` を `.env` に設定します。
+デプロイ完了後、出力される `DomainEndpoint` と `OpenSearchBedrockRoleArn` を `.env` に設定します。
 
 ### 2. ハイブリッド検索リソースの作成（Workflow API）
 
@@ -110,11 +109,11 @@ curl -X POST "${API_ENDPOINT}search" \
 
 | サービス | 内訳 | 1日あたり |
 |---------|------|----------|
-| OpenSearch Serverless | 0.5 OCU × 2 × $0.24/h | ~$5.76 |
+| OpenSearch Service | t3.medium.search × 1台 | ~$1.75 |
 | Bedrock Titan | 使用量に応じて | ~$0.01 |
 | Lambda + API Gateway | 無料枠内 | $0.00 |
 
-**合計: 約 $5.77/日 = 約 $40/週**
+**合計: 約 $1.76/日 = 約 $12/週**
 
 ### リソース削除
 
@@ -123,8 +122,7 @@ curl -X POST "${API_ENDPOINT}search" \
 ./scripts/cleanup.sh
 ```
 
-> **重要**: OpenSearch Serverless には一時停止機能がありません。
-> コストを止めるにはコレクションを削除する必要があります。
+> **重要**: コストを止めるにはドメインを削除する必要があります。
 
 ## ディレクトリ構成
 
