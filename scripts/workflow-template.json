@@ -8,6 +8,7 @@
           "type": "create_connector",
           "user_inputs": {
             "name": "Bedrock Titan Connector",
+            "description": "Connector for Amazon Bedrock Titan Embeddings V2",
             "version": "1",
             "protocol": "aws_sigv4",
             "credential": { "roleArn": "${BEDROCK_ROLE_ARN}" },

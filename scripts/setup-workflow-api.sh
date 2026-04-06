@@ -12,7 +12,7 @@ set -a && source "$PROJECT_ROOT/.env" && set +a
 
 AWS_REGION="${AWS_REGION:-ap-northeast-1}"
 
-echo "Endpoint: $COLLECTION_ENDPOINT"
+echo "Endpoint: $DOMAIN_ENDPOINT"
 echo "Role ARN: $BEDROCK_ROLE_ARN"
 echo ""
 
@@ -24,8 +24,8 @@ WORKFLOW_JSON=$(cat "$SCRIPT_DIR/workflow-template.json" | \
 # Workflow を作成 & プロビジョニング（1回のAPI呼び出し）
 echo "=== Creating and Provisioning Workflow ==="
 curl -s -X POST \
-    "${COLLECTION_ENDPOINT}/_plugins/_flow_framework/workflow?provision=true" \
-    --aws-sigv4 "aws:amz:$AWS_REGION:aoss" \
+    "https://${DOMAIN_ENDPOINT}/_plugins/_flow_framework/workflow?provision=true" \
+    --aws-sigv4 "aws:amz:$AWS_REGION:es" \
     --user "$AWS_ACCESS_KEY_ID:$AWS_SECRET_ACCESS_KEY" \
     -H "Content-Type: application/json" \
     -H "x-amz-security-token: $AWS_SESSION_TOKEN" \
