@@ -1,44 +1,25 @@
 # Slack Hybrid Search Workflow
 
-Hybrid search system for Slack messages using OpenSearch Serverless + Amazon Bedrock
+Sample code for building a hybrid search system using OpenSearch Serverless AI Connectors with Workflow API.
 
-[日本語版 README はこちら](README.ja.md)
+> **Note**: This repository contains the sample code for the blog post "[OpenSearch Serverless] Building a Hybrid Search System with AI Connectors using Workflow API".
 
 ## Overview
 
-This project enables hybrid search on Slack messages by combining keyword search (BM25) and vector search (k-NN) using OpenSearch Serverless and Amazon Bedrock.
+This project enables hybrid search on Slack messages by combining keyword search (BM25) and vector search (k-NN) using OpenSearch Serverless.
 
 ### Features
 
 - **Hybrid Search**: Search by both keyword matching and semantic similarity
+- **Workflow API**: Create all resources in a single API call
 - **Serverless**: Fully managed services, no EC2 required
-- **Cost Optimized**: Delete resources when not testing to minimize costs
-- **Multi-language Support**: Japanese language support via Amazon Titan Embeddings V2
+- **Japanese Support**: Japanese language embeddings via Amazon Titan Embeddings V2
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        OpenSearch Serverless                         │
-│                                                                      │
-│   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                 │
-│   │ AI Connector│─▶│   Model     │─▶│  Ingest     │                 │
-│   │ (Bedrock)   │  │  Register   │  │  Pipeline   │                 │
-│   └─────────────┘  └─────────────┘  └─────────────┘                 │
-│                                            │                         │
-│                                            ▼                         │
-│                    ┌─────────────┐  ┌─────────────┐                 │
-│                    │   Search    │◀─│    Index    │                 │
-│                    │  Pipeline   │  │  (Vector)   │                 │
-│                    └─────────────┘  └─────────────┘                 │
-└─────────────────────────────────────────────────────────────────────┘
-                              ▲
-                              │
-┌─────────────┐     ┌─────────────┐
-│   Slack     │────▶│ API Gateway │
-│ Events API  │     │  + Lambda   │
-└─────────────┘     └─────────────┘
-```
+![](images/ingest.png)
+
+![](images/search.png)
 
 ## Prerequisites
 
@@ -46,48 +27,47 @@ This project enables hybrid search on Slack messages by combining keyword search
 - Node.js 18.x or later
 - pnpm
 - Docker (recommended for Lambda Layer build)
-- Slack workspace admin access
 - Amazon Bedrock Titan Embeddings V2 enabled
 
 ## Quick Start
 
-### 1. Clone the Repository
+### 1. CDK Deploy
 
 ```bash
-git clone https://github.com/your-username/slack-hybrid-search-workflow.git
+# Clone the repository
+git clone https://github.com/furuya02/slack-hybrid-search-workflow.git
 cd slack-hybrid-search-workflow
-```
 
-### 2. Configure Environment Variables
-
-```bash
+# Configure environment variables
 cp .env.example .env
 # Edit .env with your AWS credentials
-```
 
-### 3. Deploy CDK Stack
-
-```bash
+# CDK deploy
 cd cdk
 pnpm install
 pnpm cdk bootstrap  # First time only
 pnpm cdk deploy
 ```
 
-### 4. Setup Workflow
+After deployment, set the output `CollectionEndpoint` and `BedrockRoleArn` in `.env`.
 
-After CDK deployment, configure the OpenSearch workflow:
+### 2. Create Hybrid Search Resources (Workflow API)
+
+Create all resources in a single API call using OpenSearch Flow Framework.
 
 ```bash
-./scripts/setup-workflow.sh
+cd ..
+./scripts/setup-workflow-api.sh
 ```
 
-### 5. Test with Sample Data (No Slack Required)
+> **Note**: For the individual API approach, see `setup-hybrid-search.sh`.
 
-You can test hybrid search with sample data before setting up Slack:
+### 3. Test with Sample Data
+
+Load Slack-style sample data (100 messages) and try hybrid search.
 
 ```bash
-# Load sample data directly to OpenSearch
+# Load sample data to OpenSearch
 ./scripts/load-sample-data.sh
 ```
 
@@ -103,58 +83,17 @@ API_ENDPOINT=$(aws cloudformation describe-stacks \
 # Test hybrid search
 curl -X POST "${API_ENDPOINT}search" \
   -H "Content-Type: application/json" \
-  -d '{"query": "Lambda が遅い", "mode": "hybrid"}'
+  -d '{"query": "Lambda is slow", "mode": "hybrid"}'
 
 # Keyword search
 curl -X POST "${API_ENDPOINT}search" \
   -H "Content-Type: application/json" \
-  -d '{"query": "コスト削減", "mode": "keyword"}'
+  -d '{"query": "cost reduction", "mode": "keyword"}'
 
 # Vector search (semantic similarity)
 curl -X POST "${API_ENDPOINT}search" \
   -H "Content-Type: application/json" \
-  -d '{"query": "パフォーマンスを改善したい", "mode": "vector"}'
-```
-
-### 6. Configure Slack App
-
-To connect with your actual Slack workspace:
-
-1. Create a new app at https://api.slack.com/apps
-2. In **OAuth & Permissions**, add these scopes:
-   - `channels:history` - Read channel messages
-   - `channels:read` - Read channel info
-   - `chat:write` - Post messages (for posting dummy data)
-3. Enable **Event Subscriptions**
-4. Set Request URL to the `SlackWebhookUrl` from CDK outputs
-5. In **Subscribe to bot events**, add `message.channels`
-6. Install the app to your workspace
-
-### 7. Post Dummy Messages to Slack for Testing
-
-After Slack integration, test indexing with dummy messages:
-
-```bash
-# Set in .env
-# SLACK_BOT_TOKEN=xoxb-your-bot-token
-# SLACK_CHANNEL_ID=C0123456789
-
-# Auto-post dummy messages
-./scripts/post-to-slack.sh
-```
-
-Alternatively, manually post the content of `scripts/sample-messages.txt` to your Slack channel.
-
-### 8. Test Search
-
-```bash
-# GET request
-curl "https://your-api-endpoint/prod/search?q=search+query&mode=hybrid"
-
-# POST request
-curl -X POST "https://your-api-endpoint/prod/search" \
-  -H "Content-Type: application/json" \
-  -d '{"query": "search query", "mode": "hybrid", "size": 10}'
+  -d '{"query": "I want to improve performance", "mode": "vector"}'
 ```
 
 ## Search Modes
@@ -171,18 +110,15 @@ curl -X POST "https://your-api-endpoint/prod/search" \
 
 | Service | Breakdown | Per Day |
 |---------|-----------|---------|
-| OpenSearch Serverless | 0.5 OCU × 2 × $0.24/h | ~$5.76 |
+| OpenSearch Serverless | 0.5 OCU x 2 x $0.24/h | ~$5.76 |
 | Bedrock Titan | Usage-based | ~$0.01 |
 | Lambda + API Gateway | Within free tier | $0.00 |
 
 **Total: ~$5.77/day = ~$40/week**
 
-### Cost Reduction
+### Delete Resources
 
 ```bash
-# Check current cost status
-./scripts/check-cost.sh
-
 # Delete all resources after testing
 ./scripts/cleanup.sh
 ```
@@ -194,36 +130,30 @@ curl -X POST "https://your-api-endpoint/prod/search" \
 
 ```
 slack-hybrid-search-workflow/
-├── cdk/                      # CDK infrastructure code
+├── cdk/                          # CDK infrastructure code
 │   ├── bin/
 │   │   └── cdk.ts
 │   ├── lib/
 │   │   └── slack-hybrid-search-stack.ts
 │   └── lambda/
-│       ├── slack_webhook/    # Slack event handler
+│       ├── slack_webhook/        # Slack event handler
 │       │   ├── handler.py
 │       │   └── requirements.txt
-│       └── search/           # Search API
+│       └── search/               # Search API
 │           ├── handler.py
 │           └── requirements.txt
 ├── scripts/
-│   ├── setup-workflow.sh     # Setup Workflow API
-│   ├── load-sample-data.sh   # Load sample data (no Slack needed)
-│   ├── post-to-slack.sh      # Post dummy messages to Slack
-│   ├── sample-messages.txt   # Sample messages list
-│   ├── cleanup.sh            # Delete resources
-│   └── check-cost.sh         # Check costs
+│   ├── setup-workflow-api.sh     # Setup using Workflow API (recommended)
+│   ├── workflow-template.json    # Workflow definition template
+│   ├── setup-hybrid-search.sh    # Setup using individual APIs (reference)
+│   ├── load-sample-data.sh       # Load sample data
+│   └── cleanup.sh                # Delete resources
+├── images/                       # Architecture diagrams
 ├── README.md
-├── README.ja.md
-└── memo.md                   # Implementation notes
+└── README.ja.md
 ```
 
 ## Troubleshooting
-
-### Slack URL Verification Fails
-
-- Verify the API Gateway endpoint URL is correct
-- Check Lambda logs for `challenge` response
 
 ### No Search Results
 
@@ -235,6 +165,19 @@ slack-hybrid-search-workflow/
 
 - Verify Bedrock Titan Embeddings V2 is enabled
 - Check IAM role has Bedrock permissions
+
+## (Reference) Actual Slack Integration
+
+To connect with your actual Slack workspace, follow these steps:
+
+1. Create a new app at https://api.slack.com/apps
+2. In **OAuth & Permissions**, add these scopes:
+   - `channels:history` - Read channel messages
+   - `channels:read` - Read channel info
+3. Enable **Event Subscriptions**
+4. Set Request URL to the `SlackWebhookUrl` from CDK outputs
+5. In **Subscribe to bot events**, add `message.channels`
+6. Install the app to your workspace
 
 ## License
 
