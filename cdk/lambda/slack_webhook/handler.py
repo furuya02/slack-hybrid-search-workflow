@@ -1,6 +1,6 @@
 """
 Slack Events API Webhook Handler
-Receives Slack events and indexes messages to OpenSearch Serverless
+Receives Slack events and indexes messages to OpenSearch Service
 """
 import json
 import os
@@ -28,7 +28,7 @@ SLACK_SIGNING_SECRET = os.environ.get('SLACK_SIGNING_SECRET', '')
 def get_opensearch_client() -> OpenSearch:
     """Create OpenSearch client with AWS SigV4 authentication."""
     region = os.environ.get('AWS_REGION', 'ap-northeast-1')
-    service = 'aoss'
+    service = 'es'
     credentials = boto3.Session().get_credentials()
 
     awsauth = AWS4Auth(
