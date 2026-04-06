@@ -134,16 +134,16 @@
 2. **再構築は簡単**
    ```bash
    cd cdk && pnpm cdk deploy
-   ./scripts/setup-workflow.sh
+   ./scripts/setup-workflow-api.sh
    ```
    - インデックスデータは消えるが、検証目的なら問題なし
 
 ### ブログで強調すべきポイント
 
 1. **Workflow API の価値**
-   - 従来 5-7 回の API 呼び出しが必要だった設定が簡略化
-   - ただし、今回は手動でステップバイステップ実装
-   - Workflow API テンプレートが安定したら、1回の API 呼び出しで完結
+   - 従来 5-7 回の API 呼び出しが必要だった設定が 1 回で完結
+   - `setup-workflow-api.sh` で Flow Framework を使用
+   - 個別 API 版は `setup-hybrid-search.sh` を参照
 
 2. **サーバーレス完結**
    - EC2 や自前のコンテナなし
