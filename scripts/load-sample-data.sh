@@ -4,93 +4,58 @@ set -e
 # ===========================================
 # Load Sample Data Script
 # ===========================================
-# このスクリプトはサンプルメッセージ（約100件）をOpenSearchに直接投入します。
-# Slack連携をセットアップせずにハイブリッド検索をテストできます。
-#
-# 前提条件:
-# - CDKスタックがデプロイ済み、または手動でOpenSearch Serverlessが構築済み
-# - Workflowセットアップが完了（./scripts/setup-workflow.sh または手動デプロイ）
-#
-# 使用方法:
-#   export OPENSEARCH_ENDPOINT="https://xxxx.ap-northeast-1.aoss.amazonaws.com"
-#   ./scripts/load-sample-data.sh
+# Prerequisites:
+# - Set COLLECTION_ENDPOINT in .env
+# - Workflow setup completed
 # ===========================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# .envファイルが存在する場合は読み込み
+# Load .env
 if [ -f "$PROJECT_ROOT/.env" ]; then
-    set -a
-    source "$PROJECT_ROOT/.env"
-    set +a
+    set -a && source "$PROJECT_ROOT/.env" && set +a
 fi
 
 AWS_REGION="${AWS_REGION:-ap-northeast-1}"
 INDEX_NAME="${INDEX_NAME:-slack-messages}"
 INGEST_PIPELINE="${INGEST_PIPELINE:-slack-ingest-pipeline}"
 
-echo "============================================="
-echo "サンプルデータをOpenSearchに投入"
-echo "============================================="
-echo ""
-
-# コレクションエンドポイントの取得
-if [ -z "$OPENSEARCH_ENDPOINT" ]; then
-    # CDKスタックから取得を試みる
-    COLLECTION_ENDPOINT=$(aws cloudformation describe-stacks \
-        --stack-name SlackHybridSearchStack \
-        --region "$AWS_REGION" \
-        --query "Stacks[0].Outputs[?OutputKey=='CollectionEndpoint'].OutputValue" \
-        --output text 2>/dev/null || echo "")
-
-    if [ -z "$COLLECTION_ENDPOINT" ] || [ "$COLLECTION_ENDPOINT" == "None" ]; then
-        echo "エラー: OPENSEARCH_ENDPOINT が設定されていません。"
-        echo "以下のコマンドで設定してください:"
-        echo ""
-        echo "  export OPENSEARCH_ENDPOINT=\"https://xxxx.ap-northeast-1.aoss.amazonaws.com\""
-        echo ""
-        exit 1
-    fi
-else
-    COLLECTION_ENDPOINT="$OPENSEARCH_ENDPOINT"
+if [ -z "$COLLECTION_ENDPOINT" ]; then
+    echo "Error: COLLECTION_ENDPOINT is required. Set it in .env"
+    exit 1
 fi
 
-echo "Collection Endpoint: $COLLECTION_ENDPOINT"
+echo "Endpoint: $COLLECTION_ENDPOINT"
 echo "Index: $INDEX_NAME"
-echo "Pipeline: $INGEST_PIPELINE"
 echo ""
 
-# ドキュメントをインデックスする関数
+# Index document function
 index_document() {
     local doc="$1"
-
-    awscurl --service aoss -X POST \
+    curl -s -X POST \
         "$COLLECTION_ENDPOINT/$INDEX_NAME/_doc?pipeline=$INGEST_PIPELINE" \
+        --aws-sigv4 "aws:amz:$AWS_REGION:aoss" \
+        --user "$AWS_ACCESS_KEY_ID:$AWS_SECRET_ACCESS_KEY" \
         -H "Content-Type: application/json" \
+        -H "x-amz-security-token: $AWS_SESSION_TOKEN" \
         -d "$doc" > /dev/null 2>&1
-
     echo -n "."
-    sleep 0.3  # レート制限対策
+    sleep 0.3
 }
 
-echo "サンプルメッセージをインデックス中..."
+echo "Indexing sample messages..."
 echo ""
 
-# チャンネルとユーザーの定義
+# Channel and user definitions
 CH_PROJECT="C0001PROJECT"
 CH_TECH="C0002TECH"
 CH_GENERAL="C0003GENERAL"
 CH_RANDOM="C0004RANDOM"
-
-# タイムスタンプのベース
 BASE_TS="1700000000"
 
-# ========================================
-# プロジェクト管理関連（20件）
-# ========================================
-echo -n "プロジェクト管理 (20件): "
-
+# Project management (20 messages)
+echo -n "Project (20): "
 index_document '{"message_id":"msg-001","channel_id":"'$CH_PROJECT'","user_id":"U001","text":"新規プロジェクトのキックオフミーティングを来週月曜日に開催します","timestamp":"'$BASE_TS'.000001","team_id":"T001"}'
 index_document '{"message_id":"msg-002","channel_id":"'$CH_PROJECT'","user_id":"U002","text":"了解しました。会議室は第3会議室でよろしいでしょうか？","timestamp":"'$BASE_TS'.000002","thread_ts":"'$BASE_TS'.000001","team_id":"T001"}'
 index_document '{"message_id":"msg-003","channel_id":"'$CH_PROJECT'","user_id":"U001","text":"はい、第3会議室を予約済みです。10時からでお願いします","timestamp":"'$BASE_TS'.000003","thread_ts":"'$BASE_TS'.000001","team_id":"T001"}'
@@ -111,14 +76,10 @@ index_document '{"message_id":"msg-017","channel_id":"'$CH_PROJECT'","user_id":"
 index_document '{"message_id":"msg-018","channel_id":"'$CH_PROJECT'","user_id":"U005","text":"テスト計画の策定を開始します","timestamp":"'$BASE_TS'.000018","team_id":"T001"}'
 index_document '{"message_id":"msg-019","channel_id":"'$CH_PROJECT'","user_id":"U001","text":"要件定義フェーズが完了しました","timestamp":"'$BASE_TS'.000019","team_id":"T001"}'
 index_document '{"message_id":"msg-020","channel_id":"'$CH_PROJECT'","user_id":"U002","text":"設計レビューのスケジュールを調整中です","timestamp":"'$BASE_TS'.000020","team_id":"T001"}'
+echo " Done"
 
-echo " 完了"
-
-# ========================================
-# 技術的な議論（30件）
-# ========================================
-echo -n "技術的な議論 (30件): "
-
+# Technical discussions (30 messages)
+echo -n "Tech (30): "
 index_document '{"message_id":"msg-021","channel_id":"'$CH_TECH'","user_id":"U003","text":"AWSのLambda関数でタイムアウトが発生しています","timestamp":"'$BASE_TS'.000021","team_id":"T001"}'
 index_document '{"message_id":"msg-022","channel_id":"'$CH_TECH'","user_id":"U005","text":"メモリを増やしてみてはいかがでしょうか？256MBから512MBに","timestamp":"'$BASE_TS'.000022","thread_ts":"'$BASE_TS'.000021","team_id":"T001"}'
 index_document '{"message_id":"msg-023","channel_id":"'$CH_TECH'","user_id":"U003","text":"試してみます。ありがとうございます","timestamp":"'$BASE_TS'.000023","thread_ts":"'$BASE_TS'.000021","team_id":"T001"}'
@@ -149,14 +110,10 @@ index_document '{"message_id":"msg-047","channel_id":"'$CH_TECH'","user_id":"U00
 index_document '{"message_id":"msg-048","channel_id":"'$CH_TECH'","user_id":"U004","text":"データベースのバックアップ設定を確認してください","timestamp":"'$BASE_TS'.000048","team_id":"T001"}'
 index_document '{"message_id":"msg-049","channel_id":"'$CH_TECH'","user_id":"U005","text":"災害復旧計画のドキュメントを更新しました","timestamp":"'$BASE_TS'.000049","team_id":"T001"}'
 index_document '{"message_id":"msg-050","channel_id":"'$CH_TECH'","user_id":"U002","text":"本番環境へのデプロイ手順書を作成中です","timestamp":"'$BASE_TS'.000050","team_id":"T001"}'
+echo " Done"
 
-echo " 完了"
-
-# ========================================
-# 一般的な会話（30件）
-# ========================================
-echo -n "一般的な会話 (30件): "
-
+# General conversation (30 messages)
+echo -n "General (30): "
 index_document '{"message_id":"msg-051","channel_id":"'$CH_GENERAL'","user_id":"U001","text":"おはようございます。今日も一日よろしくお願いします","timestamp":"'$BASE_TS'.000051","team_id":"T001"}'
 index_document '{"message_id":"msg-052","channel_id":"'$CH_GENERAL'","user_id":"U002","text":"おはようございます！","timestamp":"'$BASE_TS'.000052","thread_ts":"'$BASE_TS'.000051","team_id":"T001"}'
 index_document '{"message_id":"msg-053","channel_id":"'$CH_GENERAL'","user_id":"U003","text":"来週の金曜日は祝日のためお休みです","timestamp":"'$BASE_TS'.000053","team_id":"T001"}'
@@ -187,14 +144,10 @@ index_document '{"message_id":"msg-077","channel_id":"'$CH_GENERAL'","user_id":"
 index_document '{"message_id":"msg-078","channel_id":"'$CH_GENERAL'","user_id":"U001","text":"来月の予定を共有します","timestamp":"'$BASE_TS'.000078","team_id":"T001"}'
 index_document '{"message_id":"msg-079","channel_id":"'$CH_GENERAL'","user_id":"U002","text":"カレンダーに登録しました","timestamp":"'$BASE_TS'.000079","thread_ts":"'$BASE_TS'.000078","team_id":"T001"}'
 index_document '{"message_id":"msg-080","channel_id":"'$CH_GENERAL'","user_id":"U003","text":"お疲れ様でした。良い週末を！","timestamp":"'$BASE_TS'.000080","team_id":"T001"}'
+echo " Done"
 
-echo " 完了"
-
-# ========================================
-# 雑談（20件）
-# ========================================
-echo -n "雑談 (20件): "
-
+# Random chat (20 messages)
+echo -n "Random (20): "
 index_document '{"message_id":"msg-081","channel_id":"'$CH_RANDOM'","user_id":"U004","text":"最近読んだ技術書が面白かったので共有します","timestamp":"'$BASE_TS'.000081","team_id":"T001"}'
 index_document '{"message_id":"msg-082","channel_id":"'$CH_RANDOM'","user_id":"U005","text":"何という本ですか？","timestamp":"'$BASE_TS'.000082","thread_ts":"'$BASE_TS'.000081","team_id":"T001"}'
 index_document '{"message_id":"msg-083","channel_id":"'$CH_RANDOM'","user_id":"U004","text":"「マイクロサービスパターン」という本です","timestamp":"'$BASE_TS'.000083","thread_ts":"'$BASE_TS'.000081","team_id":"T001"}'
@@ -215,37 +168,7 @@ index_document '{"message_id":"msg-097","channel_id":"'$CH_RANDOM'","user_id":"U
 index_document '{"message_id":"msg-098","channel_id":"'$CH_RANDOM'","user_id":"U004","text":"散歩日和ですね","timestamp":"'$BASE_TS'.000098","thread_ts":"'$BASE_TS'.000097","team_id":"T001"}'
 index_document '{"message_id":"msg-099","channel_id":"'$CH_RANDOM'","user_id":"U005","text":"今年の目標は達成できそうですか？","timestamp":"'$BASE_TS'.000099","team_id":"T001"}'
 index_document '{"message_id":"msg-100","channel_id":"'$CH_RANDOM'","user_id":"U001","text":"あと少しで達成できそうです","timestamp":"'$BASE_TS'.000100","thread_ts":"'$BASE_TS'.000099","team_id":"T001"}'
+echo " Done"
 
-echo " 完了"
-
 echo ""
-echo ""
-echo "============================================="
-echo "サンプルデータの投入が完了しました！"
-echo "============================================="
-echo ""
-echo "投入件数: 100件"
-echo "  - プロジェクト管理: 20件"
-echo "  - 技術的な議論: 30件"
-echo "  - 一般的な会話: 30件"
-echo "  - 雑談: 20件"
-echo ""
-echo "============================================="
-echo "検索テスト例"
-echo "============================================="
-echo ""
-echo "# ハイブリッド検索（推奨）"
-echo "curl -X POST '\$API_GATEWAY_URL/search' \\"
-echo "  -H 'Content-Type: application/json' \\"
-echo "  -d '{\"query\": \"会議\", \"mode\": \"hybrid\"}'"
-echo ""
-echo "# 同義語検索（打ち合わせ→会議、ミーティングもヒット）"
-echo "curl -X POST '\$API_GATEWAY_URL/search' \\"
-echo "  -H 'Content-Type: application/json' \\"
-echo "  -d '{\"query\": \"打ち合わせ\", \"mode\": \"hybrid\"}'"
-echo ""
-echo "# 意味的検索（システムが重い→タイムアウト、遅いがヒット）"
-echo "curl -X POST '\$API_GATEWAY_URL/search' \\"
-echo "  -H 'Content-Type: application/json' \\"
-echo "  -d '{\"query\": \"システムが重い\", \"mode\": \"vector\"}'"
-echo ""
+echo "=== Complete: 100 messages indexed ==="
