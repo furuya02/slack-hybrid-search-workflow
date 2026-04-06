@@ -5,7 +5,7 @@ set -e
 # Load Sample Data Script
 # ===========================================
 # Prerequisites:
-# - Set COLLECTION_ENDPOINT in .env
+# - Set DOMAIN_ENDPOINT in .env
 # - Workflow setup completed
 # ===========================================
 
@@ -21,12 +21,12 @@ AWS_REGION="${AWS_REGION:-ap-northeast-1}"
 INDEX_NAME="${INDEX_NAME:-slack-messages}"
 INGEST_PIPELINE="${INGEST_PIPELINE:-slack-ingest-pipeline}"
 
-if [ -z "$COLLECTION_ENDPOINT" ]; then
-    echo "Error: COLLECTION_ENDPOINT is required. Set it in .env"
+if [ -z "$DOMAIN_ENDPOINT" ]; then
+    echo "Error: DOMAIN_ENDPOINT is required. Set it in .env"
     exit 1
 fi
 
-echo "Endpoint: $COLLECTION_ENDPOINT"
+echo "Endpoint: $DOMAIN_ENDPOINT"
 echo "Index: $INDEX_NAME"
 echo ""
 
@@ -34,8 +34,8 @@ echo ""
 index_document() {
     local doc="$1"
     curl -s -X POST \
-        "$COLLECTION_ENDPOINT/$INDEX_NAME/_doc?pipeline=$INGEST_PIPELINE" \
-        --aws-sigv4 "aws:amz:$AWS_REGION:aoss" \
+        "https://${DOMAIN_ENDPOINT}/$INDEX_NAME/_doc?pipeline=$INGEST_PIPELINE" \
+        --aws-sigv4 "aws:amz:$AWS_REGION:es" \
         --user "$AWS_ACCESS_KEY_ID:$AWS_SECRET_ACCESS_KEY" \
         -H "Content-Type: application/json" \
         -H "x-amz-security-token: $AWS_SESSION_TOKEN" \

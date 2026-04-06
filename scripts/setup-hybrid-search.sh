@@ -14,8 +14,8 @@ INDEX_NAME="${INDEX_NAME:-slack-messages}"
 
 # API呼び出し用関数
 call_api() {
-    curl -s -X "$1" "${COLLECTION_ENDPOINT}$2" \
-        --aws-sigv4 "aws:amz:$AWS_REGION:aoss" \
+    curl -s -X "$1" "https://${DOMAIN_ENDPOINT}$2" \
+        --aws-sigv4 "aws:amz:$AWS_REGION:es" \
         --user "$AWS_ACCESS_KEY_ID:$AWS_SECRET_ACCESS_KEY" \
         -H "Content-Type: application/json" \
         -H "x-amz-security-token: $AWS_SESSION_TOKEN" \
@@ -25,6 +25,7 @@ call_api() {
 echo "=== Step 1: Create Connector ==="
 CONNECTOR_ID=$(call_api POST "/_plugins/_ml/connectors/_create" '{
   "name": "Bedrock Titan Connector",
+  "description": "Connector for Amazon Bedrock Titan Embeddings V2",
   "version": 1,
   "protocol": "aws_sigv4",
   "credential": { "roleArn": "'"$BEDROCK_ROLE_ARN"'" },

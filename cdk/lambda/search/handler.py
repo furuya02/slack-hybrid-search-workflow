@@ -2,7 +2,7 @@
 ハイブリッド検索 API ハンドラー
 
 このLambda関数は以下の機能を提供します：
-1. OpenSearch Serverlessに対するハイブリッド検索（BM25 + k-NN）
+1. OpenSearch Serviceに対するハイブリッド検索（BM25 + k-NN）
 2. 3つの検索モード（hybrid/keyword/vector）をサポート
 3. AI Connectors（Neural Search）を活用してOpenSearch側でクエリをベクトル化
 4. GET/POST両方のHTTPメソッドに対応
@@ -27,7 +27,7 @@ logger.setLevel(logging.INFO)
 # ============================================================
 # 環境変数の読み込み
 # ============================================================
-OPENSEARCH_ENDPOINT = os.environ.get('OPENSEARCH_ENDPOINT', '')  # OpenSearch Serverlessエンドポイント
+OPENSEARCH_ENDPOINT = os.environ.get('OPENSEARCH_ENDPOINT', '')  # OpenSearch Serviceエンドポイント
 INDEX_NAME = os.environ.get('INDEX_NAME', 'slack-messages')       # 検索対象インデックス
 SEARCH_PIPELINE = os.environ.get('SEARCH_PIPELINE', 'hybrid-search-pipeline')  # スコア正規化パイプライン
 MODEL_ID = os.environ.get('MODEL_ID', '')                         # AI ConnectorのモデルID
@@ -36,14 +36,14 @@ AWS_REGION = os.environ.get('AWS_REGION', 'ap-northeast-1')       # AWSリージ
 
 def get_opensearch_client() -> OpenSearch:
     """
-    OpenSearch Serverlessクライアントを作成する
+    OpenSearch Serviceクライアントを作成する
 
-    AWS SigV4認証を使用してOpenSearch Serverlessに接続します。
+    AWS SigV4認証を使用してOpenSearch Serviceに接続します。
 
     Returns:
         OpenSearch: 認証済みのOpenSearchクライアントインスタンス
     """
-    service = 'aoss'  # OpenSearch Serverlessのサービス識別子
+    service = 'es'  # OpenSearch Serviceのサービス識別子
     credentials = boto3.Session().get_credentials()
 
     # AWS SigV4認証オブジェクトを作成

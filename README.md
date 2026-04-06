@@ -1,12 +1,12 @@
 # Slack Hybrid Search Workflow
 
-Sample code for building a hybrid search system using OpenSearch Serverless AI Connectors with Workflow API.
+Sample code for building a hybrid search system using OpenSearch Service AI Connectors with Workflow API.
 
-> **Note**: This repository contains the sample code for the blog post "[OpenSearch Serverless] Building a Hybrid Search System with AI Connectors using Workflow API".
+> **Note**: This repository contains the sample code for the blog post "[OpenSearch Service] Building a Hybrid Search System with AI Connectors using Workflow API".
 
 ## Overview
 
-This project enables hybrid search on Slack messages by combining keyword search (BM25) and vector search (k-NN) using OpenSearch Serverless.
+This project enables hybrid search on Slack messages by combining keyword search (BM25) and vector search (k-NN) using OpenSearch Service.
 
 ### Features
 
@@ -49,7 +49,7 @@ pnpm cdk bootstrap  # First time only
 pnpm cdk deploy
 ```
 
-After deployment, set the output `CollectionEndpoint` and `BedrockRoleArn` in `.env`.
+After deployment, set the output `DomainEndpoint` and `OpenSearchBedrockRoleArn` in `.env`.
 
 ### 2. Create Hybrid Search Resources (Workflow API)
 
@@ -110,11 +110,11 @@ curl -X POST "${API_ENDPOINT}search" \
 
 | Service | Breakdown | Per Day |
 |---------|-----------|---------|
-| OpenSearch Serverless | 0.5 OCU x 2 x $0.24/h | ~$5.76 |
+| OpenSearch Service | t3.medium.search x 1 instance | ~$1.75 |
 | Bedrock Titan | Usage-based | ~$0.01 |
 | Lambda + API Gateway | Within free tier | $0.00 |
 
-**Total: ~$5.77/day = ~$40/week**
+**Total: ~$1.76/day = ~$12/week**
 
 ### Delete Resources
 
@@ -123,8 +123,7 @@ curl -X POST "${API_ENDPOINT}search" \
 ./scripts/cleanup.sh
 ```
 
-> **Important**: OpenSearch Serverless does not have a pause feature.
-> You must delete the collection to stop charges.
+> **Important**: You must delete the domain to stop charges.
 
 ## Directory Structure
 

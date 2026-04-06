@@ -1,9 +1,10 @@
 import * as cdk from 'aws-cdk-lib/core';
-import * as opensearchserverless from 'aws-cdk-lib/aws-opensearchserverless';
+import * as opensearch from 'aws-cdk-lib/aws-opensearchservice';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
 import * as path from 'path';
 import { execSync } from 'child_process';
@@ -12,66 +13,14 @@ export class SlackHybridSearchStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    const collectionName = 'slack-knowledge-base';
-
-    // ===========================================
-    // OpenSearch Serverless Collection
-    // ===========================================
-
-    // 暗号化ポリシー
-    const encryptionPolicy = new opensearchserverless.CfnSecurityPolicy(this, 'EncryptionPolicy', {
-      name: `${collectionName}-encryption`,
-      type: 'encryption',
-      policy: JSON.stringify({
-        Rules: [
-          {
-            ResourceType: 'collection',
-            Resource: [`collection/${collectionName}`],
-          },
-        ],
-        AWSOwnedKey: true,
-      }),
-    });
-
-    // ネットワークポリシー（パブリックアクセス）
-    const networkPolicy = new opensearchserverless.CfnSecurityPolicy(this, 'NetworkPolicy', {
-      name: `${collectionName}-network`,
-      type: 'network',
-      policy: JSON.stringify([
-        {
-          Rules: [
-            {
-              ResourceType: 'collection',
-              Resource: [`collection/${collectionName}`],
-            },
-            {
-              ResourceType: 'dashboard',
-              Resource: [`collection/${collectionName}`],
-            },
-          ],
-          AllowFromPublic: true,
-        },
-      ]),
-    });
-
-    // OpenSearch Serverless コレクション（VectorSearch タイプ）
-    // コスト削減設定: 冗長性を無効化（検証環境向け）
-    const collection = new opensearchserverless.CfnCollection(this, 'SlackKnowledgeBase', {
-      name: collectionName,
-      type: 'VECTORSEARCH',
-      description: 'Slack messages with hybrid search capability',
-      standbyReplicas: 'DISABLED', // 冗長性を無効化（最低2 OCUに削減、本番環境では 'ENABLED' を推奨）
-    });
-
-    collection.addDependency(encryptionPolicy);
-    collection.addDependency(networkPolicy);
+    const domainName = 'slack-hybrid-search';
 
     // ===========================================
     // IAM Role for OpenSearch to access Bedrock
     // ===========================================
     const openSearchBedrockRole = new iam.Role(this, 'OpenSearchBedrockRole', {
       roleName: 'OpenSearchBedrockRole',
-      assumedBy: new iam.ServicePrincipal('opensearchservice.amazonaws.com'),
+      assumedBy: new iam.ServicePrincipal('es.amazonaws.com'),
       description: 'Role for OpenSearch to invoke Bedrock models',
       inlinePolicies: {
         BedrockInvokeModelPolicy: new iam.PolicyDocument({
@@ -89,10 +38,54 @@ export class SlackHybridSearchStack extends cdk.Stack {
     });
 
     // ===========================================
+    // OpenSearch Service Domain
+    // ===========================================
+    const domain = new opensearch.Domain(this, 'SlackHybridSearchDomain', {
+      domainName: domainName,
+      version: opensearch.EngineVersion.OPENSEARCH_2_13,
+
+      // 最小構成（コスト最適化）
+      capacity: {
+        dataNodes: 1,
+        dataNodeInstanceType: 't3.medium.search',
+        multiAzWithStandbyEnabled: false,
+      },
+
+      // EBS ストレージ
+      ebs: {
+        volumeSize: 10,
+        volumeType: ec2.EbsDeviceVolumeType.GP3,
+      },
+
+      // パブリックアクセス（検証用）
+      // 本番環境では VPC 内に配置することを推奨
+
+      // ノード間暗号化
+      nodeToNodeEncryption: true,
+      encryptionAtRest: {
+        enabled: true,
+      },
+
+      // Fine-grained access control を無効化（シンプルな構成）
+      fineGrainedAccessControl: undefined,
+
+      // HTTPS 必須
+      enforceHttps: true,
+
+      // ログ
+      logging: {
+        slowSearchLogEnabled: true,
+        slowIndexLogEnabled: true,
+        appLogEnabled: true,
+      },
+
+      // 削除保護を無効化（検証用）
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    // ===========================================
     // Lambda Execution Role
     // ===========================================
-    // Note: AI Connectors（Neural Search）を使用するため、Lambda側でBedrockを
-    // 呼び出す必要はありません。クエリのベクトル化はOpenSearch内部で自動実行されます。
     const lambdaRole = new iam.Role(this, 'LambdaExecutionRole', {
       roleName: 'SlackHybridSearchLambdaRole',
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
@@ -102,11 +95,17 @@ export class SlackHybridSearchStack extends cdk.Stack {
       inlinePolicies: {
         LambdaExecutionPolicy: new iam.PolicyDocument({
           statements: [
-            // OpenSearch Serverless へのアクセス権限
+            // OpenSearch Service へのアクセス権限
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: ['aoss:APIAccessAll'],
-              resources: [collection.attrArn],
+              actions: [
+                'es:ESHttpGet',
+                'es:ESHttpPost',
+                'es:ESHttpPut',
+                'es:ESHttpDelete',
+                'es:ESHttpHead',
+              ],
+              resources: [`${domain.domainArn}/*`],
             }),
           ],
         }),
@@ -114,53 +113,25 @@ export class SlackHybridSearchStack extends cdk.Stack {
     });
 
     // ===========================================
-    // Data Access Policy for OpenSearch Serverless
+    // Domain Access Policy
     // ===========================================
-    const dataAccessPolicy = new opensearchserverless.CfnAccessPolicy(this, 'DataAccessPolicy', {
-      name: `${collectionName}-data-access`,
-      type: 'data',
-      policy: JSON.stringify([
-        {
-          Rules: [
-            {
-              ResourceType: 'collection',
-              Resource: [`collection/${collectionName}`],
-              Permission: [
-                'aoss:CreateCollectionItems',
-                'aoss:DeleteCollectionItems',
-                'aoss:UpdateCollectionItems',
-                'aoss:DescribeCollectionItems',
-              ],
-            },
-            {
-              ResourceType: 'index',
-              Resource: [`index/${collectionName}/*`],
-              Permission: [
-                'aoss:CreateIndex',
-                'aoss:DeleteIndex',
-                'aoss:UpdateIndex',
-                'aoss:DescribeIndex',
-                'aoss:ReadDocument',
-                'aoss:WriteDocument',
-              ],
-            },
-          ],
-          Principal: [
-            lambdaRole.roleArn,
-            openSearchBedrockRole.roleArn,
-            // 現在のアカウントの管理者アクセス用（Workflow API実行用）
-            `arn:aws:iam::${this.account}:root`,
-          ],
-        },
-      ]),
-    });
-
-    dataAccessPolicy.addDependency(collection);
+    domain.addAccessPolicies(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        principals: [
+          new iam.ArnPrincipal(lambdaRole.roleArn),
+          new iam.ArnPrincipal(openSearchBedrockRole.roleArn),
+          // 管理者アクセス用（Workflow API実行用）
+          new iam.ArnPrincipal(`arn:aws:iam::${this.account}:role/cm-hirauchi.shinichi`),
+        ],
+        actions: ['es:*'],
+        resources: [`${domain.domainArn}/*`],
+      })
+    );
 
     // ===========================================
-    // Lambda Functions（ローカルバンドリングで依存ライブラリをインストール、Docker不要）
+    // Lambda Functions
     // ===========================================
-
     const slackWebhookLambdaPath = path.join(__dirname, '../lambda/slack_webhook');
     const searchLambdaPath = path.join(__dirname, '../lambda/search');
 
@@ -185,7 +156,7 @@ export class SlackHybridSearchStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
       environment: {
-        OPENSEARCH_ENDPOINT: collection.attrCollectionEndpoint,
+        OPENSEARCH_ENDPOINT: domain.domainEndpoint,
         INDEX_NAME: 'slack-messages',
         INGEST_PIPELINE: 'slack-ingest-pipeline',
       },
@@ -213,12 +184,9 @@ export class SlackHybridSearchStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
       environment: {
-        OPENSEARCH_ENDPOINT: collection.attrCollectionEndpoint,
+        OPENSEARCH_ENDPOINT: domain.domainEndpoint,
         INDEX_NAME: 'slack-messages',
         SEARCH_PIPELINE: 'hybrid-search-pipeline',
-        // MODEL_ID: Workflow実行後に取得したモデルIDを設定
-        // Lambda コンソールで環境変数を追加するか、以下のように設定してから再デプロイ
-        // MODEL_ID: 'xxxxxxxx',  // ← Workflow実行後に取得したmodel_idを設定
       },
       logRetention: logs.RetentionDays.ONE_WEEK,
     });
@@ -249,22 +217,28 @@ export class SlackHybridSearchStack extends cdk.Stack {
     // ===========================================
     // Outputs
     // ===========================================
-    new cdk.CfnOutput(this, 'CollectionEndpoint', {
-      value: collection.attrCollectionEndpoint,
-      description: 'OpenSearch Serverless Collection Endpoint',
-      exportName: 'SlackHybridSearchCollectionEndpoint',
+    new cdk.CfnOutput(this, 'DomainEndpoint', {
+      value: domain.domainEndpoint,
+      description: 'OpenSearch Service Domain Endpoint',
+      exportName: 'SlackHybridSearchDomainEndpoint',
     });
 
-    new cdk.CfnOutput(this, 'CollectionArn', {
-      value: collection.attrArn,
-      description: 'OpenSearch Serverless Collection ARN',
-      exportName: 'SlackHybridSearchCollectionArn',
+    new cdk.CfnOutput(this, 'DomainArn', {
+      value: domain.domainArn,
+      description: 'OpenSearch Service Domain ARN',
+      exportName: 'SlackHybridSearchDomainArn',
     });
 
     new cdk.CfnOutput(this, 'OpenSearchBedrockRoleArn', {
       value: openSearchBedrockRole.roleArn,
       description: 'IAM Role ARN for OpenSearch to access Bedrock',
       exportName: 'OpenSearchBedrockRoleArn',
+    });
+
+    new cdk.CfnOutput(this, 'OpenSearchDashboardsUrl', {
+      value: `https://${domain.domainEndpoint}/_dashboards`,
+      description: 'OpenSearch Dashboards URL',
+      exportName: 'OpenSearchDashboardsUrl',
     });
 
     new cdk.CfnOutput(this, 'ApiEndpoint', {
