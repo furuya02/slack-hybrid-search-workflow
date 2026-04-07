@@ -71,7 +71,58 @@ curl -s -X GET "https://${DOMAIN_ENDPOINT}/_plugins/_flow_framework/workflow/${W
     -H "x-amz-security-token: ${AWS_SESSION_TOKEN}" | jq .
 ```
 
-`state: "COMPLETED"` を確認し、`resources_created` から `model_id` をメモします。
+`state: "COMPLETED"` を確認し、`resources_created` から各リソースの ID をメモします。
+
+#### リソースの確認（OpenSearch Dashboards）
+
+OpenSearch Dashboards の Dev Tools で、作成されたリソースを確認できます。
+
+**Workflow ステータス**
+```
+GET /_plugins/_flow_framework/workflow/<workflow_id>/_status
+```
+
+レスポンスの `resources_created` から各リソースの ID を確認します：
+```json
+{
+  "state": "COMPLETED",
+  "resources_created": [
+    { "workflow_step_name": "create_connector", "resource_id": "<connector_id>" },
+    { "workflow_step_name": "register_model", "resource_id": "<model_id>" },
+    { "workflow_step_name": "deploy_model", "resource_id": "<model_id>" },
+    { "workflow_step_name": "create_ingest_pipeline", "resource_id": "slack-ingest-pipeline" },
+    { "workflow_step_name": "create_index", "resource_id": "slack-messages" },
+    { "workflow_step_name": "create_search_pipeline", "resource_id": "hybrid-search-pipeline" }
+  ]
+}
+```
+
+**AI Connector**
+```
+GET /_plugins/_ml/connectors/<connector_id>
+```
+
+**Model（デプロイ状態）**
+```
+GET /_plugins/_ml/models/<model_id>
+```
+`model_state: "DEPLOYED"` であることを確認します。
+
+**Ingest Pipeline**
+```
+GET /_ingest/pipeline/slack-ingest-pipeline
+```
+
+**Index**
+```
+GET /slack-messages
+```
+`settings.index.knn: "true"` と `settings.index.default_pipeline: "slack-ingest-pipeline"` を確認します。
+
+**Search Pipeline**
+```
+GET /_search/pipeline/hybrid-search-pipeline
+```
 
 > **Note**: 個別APIを使う方法は `setup-hybrid-search.sh` を参照してください。
 

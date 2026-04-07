@@ -72,7 +72,58 @@ curl -s -X GET "https://${DOMAIN_ENDPOINT}/_plugins/_flow_framework/workflow/${W
     -H "x-amz-security-token: ${AWS_SESSION_TOKEN}" | jq .
 ```
 
-Verify `state: "COMPLETED"` and note the `model_id` from `resources_created`.
+Verify `state: "COMPLETED"` and note the resource IDs from `resources_created`.
+
+#### Verify Resources (OpenSearch Dashboards)
+
+You can verify the created resources using OpenSearch Dashboards Dev Tools.
+
+**Workflow Status**
+```
+GET /_plugins/_flow_framework/workflow/<workflow_id>/_status
+```
+
+Check the resource IDs from `resources_created` in the response:
+```json
+{
+  "state": "COMPLETED",
+  "resources_created": [
+    { "workflow_step_name": "create_connector", "resource_id": "<connector_id>" },
+    { "workflow_step_name": "register_model", "resource_id": "<model_id>" },
+    { "workflow_step_name": "deploy_model", "resource_id": "<model_id>" },
+    { "workflow_step_name": "create_ingest_pipeline", "resource_id": "slack-ingest-pipeline" },
+    { "workflow_step_name": "create_index", "resource_id": "slack-messages" },
+    { "workflow_step_name": "create_search_pipeline", "resource_id": "hybrid-search-pipeline" }
+  ]
+}
+```
+
+**AI Connector**
+```
+GET /_plugins/_ml/connectors/<connector_id>
+```
+
+**Model (Deployment State)**
+```
+GET /_plugins/_ml/models/<model_id>
+```
+Verify that `model_state: "DEPLOYED"`.
+
+**Ingest Pipeline**
+```
+GET /_ingest/pipeline/slack-ingest-pipeline
+```
+
+**Index**
+```
+GET /slack-messages
+```
+Verify `settings.index.knn: "true"` and `settings.index.default_pipeline: "slack-ingest-pipeline"`.
+
+**Search Pipeline**
+```
+GET /_search/pipeline/hybrid-search-pipeline
+```
 
 > **Note**: For the individual API approach, see `setup-hybrid-search.sh`.
 
